@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import datetime
 import st_yled
+import time
 
 from Utilities.gsheet_functionv2 import *
 from Utilities.dframe_utility import *
@@ -128,6 +129,7 @@ for tab in tab_list:
             st.metric(string, 
                         "₱" + str(f"{monthly_due:.2f}"),
                         # abs(monthly_due/2 - monthly_due),
+                        " ",
                         chart_data=[0,monthly_due/2,monthly_due,monthly_due/2], 
                         chart_type="area",
                         border=True,
@@ -156,7 +158,7 @@ for tab in tab_list:
         # Transaction Modifiers
         with transmodifier_col:
             @st.dialog("Add Transaction",on_dismiss="rerun")
-            def add():
+            def add_transaction():
                 st.divider()
                 date_col,unlock_col,amount_col = st.columns([0.45,0.05,0.60],vertical_alignment="bottom")
                 date_disabled_state = True
@@ -169,30 +171,68 @@ for tab in tab_list:
                 date_of_transaction = date_col.date_input("Date", "today",disabled=date_disabled_state)
 
                 # Amount Column
-                amount = amount_col.number_input("Amount",icon=":material/currency_ruble:")
+                amount = amount_col.number_input("Amount",value=None,icon=":material/currency_ruble:")
+                
+                # User and Bank Column
+                user_col, bank_col = st.columns(2)
+                transaction_borrower = user_col.multiselect('Card User/s',options=default_borrowers)
+                bank_selection = bank_col.selectbox('Bank',options=bank_list)
                 
                 # Text Columns
                 description = st.text_input("Description")
+                
                 remarks = st.text_area('Remarks')
-
+                
                 # Installment Columns
                 installment_check_col, installment_drop = st.columns(2)
                 installment_check = installment_check_col.checkbox('Installment?')
+                installment_selection = None
                 if installment_check:
                     installment_selection = installment_drop.selectbox(
                         "Terms",
-                        ['3 Months','6 months', '9 months', '12 months', '18 month'],
+                        ['3 Months','6 months', '9 months', '12 months', '18 months'],
                         placeholder='Payment Terms',
                         label_visibility="collapsed"
                     )
 
-                col1,col2,button_col = st.columns([0.70,0.10,0.20])
+                # Bottom Modal Columns
+                col1,col2,button_col = st.columns([0.70,0.10,0.20],vertical_alignment="bottom")
 
+                # Submit button Column
                 if button_col.button("Submit"):
-                    pass
+                    with st.spinner("Submitting...", show_time=False):
+                    # Generates multiple entries based on installment terms
+                        if installment_check:
+                            installment_selection
+
+                            new_row = {
+                                "DATE": date_of_transaction,
+                                "DESCRIPTION": description,
+                                "BANK": bank_selection.upper(),
+                                "BORROWER": transaction_borrower,
+                                "AMOUNT": amount,
+                                "INSTALLMENT": installment_selection,
+                                "REMARKS": remarks
+                            }
+                        else:
+                            new_row = {
+                                "DATE": date_of_transaction,
+                                "DESCRIPTION": description,
+                                "BANK": bank_selection.upper(),
+                                "BORROWER": transaction_borrower,
+                                "AMOUNT": amount,
+                                "INSTALLMENT": installment_selection,
+                                "REMARKS": remarks
+                            }
+                        # with st.spinner("Submitting...", show_time=False):
+                        time.sleep(3)
+                    success = st.success('Transaction submitted!', icon="✅")
+                    new_row
+                    time.sleep(1.5)
+                    st.rerun()
                 
             if st.button("Add Transaction",key=bank+'add'):
-                add()
+                add_transaction()
 
 
 ### SIDEBAR FOOTER
