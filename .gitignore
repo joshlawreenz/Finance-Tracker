@@ -87,6 +87,7 @@ ipython_config.py
 #   intended to run in multiple environments; otherwise, check them in:
 .python-version
 service_account.json
+local_sheet_backup.csv
 
 # pipenv
 #   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.

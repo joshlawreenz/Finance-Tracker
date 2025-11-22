@@ -60,7 +60,6 @@ def get_monthly_due(dataframe,bank):
 
     return total
 
-
 # Create JSON for bank details
 def generate_bank_details(bank_list):
     bank_details_list = []

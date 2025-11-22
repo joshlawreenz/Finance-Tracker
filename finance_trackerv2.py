@@ -140,6 +140,15 @@ for tab in tab_list:
             # Filters borrowers
             bank_borrowers = [i.upper() for i in borrowers]
             bank_df = bank_df[bank_df["BORROWER"].isin(bank_borrowers)]
+
+            # Sort transactions based on date
+            bank_df["DATE"] = pd.to_datetime(bank_df["DATE"])
+            bank_df = bank_df.sort_values("DATE", ascending=False)
+            bank_df["DATE"] = bank_df["DATE"].dt.strftime("%B %d, %Y")
+
+            # Reduces date redundancy
+            bank_df["DATE"] = bank_df["DATE"].mask(bank_df["DATE"].duplicated(), "")
+
             st.dataframe(bank_df, width="stretch", hide_index=True)
 
             index += 1
