@@ -1,11 +1,11 @@
 import streamlit as st
 from datetime import datetime
 import st_yled
-import plotly.express as px
-import plotly.graph_objects as go
 
 from Utilities.gsheet_functionv2 import *
 from Utilities.dframe_utility import *
+
+now = datetime.now()
 
 SERVICE_ACCOUNT_FILE = "service_account.json"
 PESO_ICON = "assets/gold_peso.svg"
@@ -28,12 +28,12 @@ def display_logo(bank):
 st_yled.init()
 
 st.set_page_config(
-    page_title="Personal Finance Tracker",
+    page_title="CardSpend Monitor",
     page_icon=PESO_ICON,
     layout="wide",
     initial_sidebar_state="auto" #"collapsed" later
 )
-st.title("💳 Credit Card Spending Tracker")
+st.title("CardSpend Monitor")
 st.logo(
     LOGO_ICON,
     # link="https://streamlit.io/gallery",
@@ -63,7 +63,7 @@ df = df[::-1]
 borrowers = default_borrowers = get_borrowers_list(df)
 # bank_list = get_bank_list(df)
 bank_list = ['EASTWEST','RCBC', 'BPI']
-bank_list_colored = [':violet[EASTWEST]',':yellow[RCBC]',':red[BPI]']
+bank_list_colored = [':violet[EASTWEST]',':blue[RCBC]',':red[BPI]']
 
 # Get Total Amount Spent
 sidebar_total_amount = get_total_amount_spent(df,borrowers)
@@ -87,74 +87,108 @@ df_display["DATE"] = pd.to_datetime(df["DATE"])
 df_display["DATE"] = df_display["DATE"].dt.strftime("%B %d, %Y")
 
 bank_image = [EW_LOGO,RCBC_LOGO,BPI_LOGO]
-# BANK Tabs
-index = 0
 
+# Generates JSON bank details
+bank_details_list = generate_bank_details(bank_list)
+
+### Bank Tabs
+index = 0
 for tab in tab_list:
     with tab:
         bank = bank_list[index]
         breakdown = get_total_amount_spent(df_display,borrowers,bank)
         bank_df = df_display[df_display["BANK"] == bank]
-        
-        col1,col2,col3 = st.columns([0.3,0.3,0.3],vertical_alignment="center")
-        with col3:
-            st.subheader("Breakdown")
-            st.dataframe(breakdown,width=380,hide_index=True)
-        with col1:
+        monthly_due = get_monthly_due(df_display,bank)
+
+        logo_col,breakdown_col,totalamount_col = st.columns([0.25,0.25,0.34],vertical_alignment='center')
+
+        # Displays the bank logo, has strict sizes so SVG editing is needed
+        with logo_col:
             display_logo(bank)
-        # with col2:
-        #     # df = px.data.tips()
-        #     # fig = px.pie(breakdown, values='Total', names='Name',color_discrete_sequence=px.colors.sequential.RdBu)
-        #     # test = st.plotly_chart(fig,on_select="rerun",key=bank)
-        #     name_list = [i["Name"] for i in breakdown]
-        #     value_list = [i["Total"] for i in breakdown]
-        #     colors = ["purple", "green", "gold", "lightgreen"]
+            default_borrowers = [i.capitalize() for i in default_borrowers]
 
-        #     fig = go.Figure(
-        #         data=[
-        #             go.Pie(
-        #                 labels=name_list, 
-        #                 values=value_list, 
-        #                 marker=dict(colors=colors, pattern=dict(shape=[".", "x", "+", "-"])),
-        #                 hole=.3)
-        #             ]
-        #             # ,layout_showlegend=False
-        #             )
-        #     fig.update_traces(hoverinfo='label+value',textinfo='label', textfont_size=20)
-        #     test = st.plotly_chart(fig,on_select="rerun",key=bank)
-        st.subheader("Transactions")
-        st.dataframe(bank_df, width="stretch", hide_index=True)
+            # Allows User filtering
+            filter_options = st.pills(
+                "Filter", 
+                default_borrowers, 
+                selection_mode="multi",
+                key=bank,
+                default=default_borrowers
+                )
+            borrowers = filter_options
 
-        index += 1
+        # Breakdown Column
+        with breakdown_col:
+            st.subheader("Breakdown")
+            st.dataframe(breakdown,hide_index=True)
 
-filter_borrowers = []
-for borrower in borrowers:
-    filter_borrowers.append(borrower.capitalize())
+        # Transaction Metric (WIP)
+        with totalamount_col:
+            string = bank_details_list[index].get('total_amount_string')
+            st.metric(string, 
+                        "₱" + str(f"{monthly_due:.2f}"),
+                        # abs(monthly_due/2 - monthly_due),
+                        chart_data=[0,monthly_due/2,monthly_due,monthly_due/2], 
+                        chart_type="area",
+                        border=True,
+                        )
+        translist_col,transmodifier_col = st.columns([0.6,0.4],vertical_alignment="top",border=True)
 
-default_borrowers = [i.capitalize() for i in default_borrowers]
+        # Transaction List (Dataframe)
+        with translist_col:
+            st.subheader("Transactions")
+            # Filters borrowers
+            bank_borrowers = [i.upper() for i in borrowers]
+            bank_df = bank_df[bank_df["BORROWER"].isin(bank_borrowers)]
+            st.dataframe(bank_df, width="stretch", hide_index=True)
 
-col1, col2, col3 = st.columns([0.75,0.45,0.10],vertical_alignment="bottom")
-with col2:
-    filter_options = st.multiselect(
-        "Filter",
-        default_borrowers,
-        default= default_borrowers,
-        # on_change=apply_button(),
-        label_visibility = 'collapsed'
-    )
-    st.session_state['filter_name'] = filter_options
-with col3:
-    # apply_button = st_yled.button('Apply',type='secondary')
-    apply_button = st_yled.button('Apply', type="secondary",font_size="13.0px",
-                                #   background_color="#2E2E2E",color="#FFD700"
-                                  )
-    if apply_button:
-        st.rerun()
+            index += 1
+
+        # Transaction Modifiers
+        with transmodifier_col:
+            @st.dialog("Add Transaction",on_dismiss="rerun")
+            def add():
+                st.divider()
+                date_col,unlock_col,amount_col = st.columns([0.45,0.05,0.60],vertical_alignment="bottom")
+                date_disabled_state = True
+
+                # Lock icon Column
+                if unlock_col.button(":material/lock_open:",type='tertiary',help='Unlock date'):
+                    date_disabled_state = False
+
+                # Date Column
+                date_of_transaction = date_col.date_input("Date", "today",disabled=date_disabled_state)
+
+                # Amount Column
+                amount = amount_col.number_input("Amount",icon=":material/currency_ruble:")
+                
+                # Text Columns
+                description = st.text_input("Description")
+                remarks = st.text_area('Remarks')
+
+                # Installment Columns
+                installment_check_col, installment_drop = st.columns(2)
+                installment_check = installment_check_col.checkbox('Installment?')
+                if installment_check:
+                    installment_selection = installment_drop.selectbox(
+                        "Terms",
+                        ['3 Months','6 months', '9 months', '12 months', '18 month'],
+                        placeholder='Payment Terms',
+                        label_visibility="collapsed"
+                    )
+
+                col1,col2,button_col = st.columns([0.70,0.10,0.20])
+
+                if button_col.button("Submit"):
+                    pass
+                
+            if st.button("Add Transaction",key=bank+'add'):
+                add()
 
 
 ### SIDEBAR FOOTER
 with st.sidebar:
-    st.title("Top Spenders for this Month 💵")
+    st_yled.title("Top Spenders of the Month 💵",font_size="20.0px")
     top_spender = sidebar_total_amount
 
     # Rank Spenders
@@ -180,7 +214,7 @@ with st.sidebar:
             count += 1
     with col2:
         for spender in top_spender:
-            st.markdown(f"## <span style='color: #AFED32'>{spender["Total"]}</span>", 
+            st.markdown(f"## <span style='color: #AFED32'>₱ {spender["Total"]}</span>", 
                 unsafe_allow_html=True
             )
 
@@ -194,15 +228,17 @@ with st.sidebar:
     # # Cleanly adjust spacing
     space=0
     while space < 2:
-        st.space(size="large")
+        st.space(size="medium")
         space +=1
     st.space(size="small")
     st.divider()
-    st.write("This is my personal spending tracker which is currently synced to my Google Sheets account.")
-    st.write("This is still a work in progress.")
-    st.write("## Josh V. " + "૮ ･ ﻌ･ა")
+    st_yled.caption("Hey there!",font_size="11.0px")
+    st_yled.caption("This is my personal spending tracker which is currently synced to my Google Sheets account.",font_size="11.0px")
+    st_yled.link_button(":green[Google Sheet]", "https://docs.google.com/spreadsheets/d/1qFQco0hOYwg8_SYcqj_kDXcdb_Gf9GKtlnU1ok4nok8/edit?pli=1&gid=1924750089#gid=1924750089",type="tertiary",font_size="13.0px")
+    st_yled.caption("This is still a work in progress.",font_size="11.0px")
+    st_yled.caption("## Josh V. " + "૮ ･ ﻌ･ა",font_size="11.0px")
     st.divider()
-    st.caption(f"{datetime.now().strftime("%A | %B %d, %Y")}")
+    st.write(f"{datetime.now().strftime("%A | %B %d, %Y")}")
 
 # df = st.dataframe(df, width="stretch", hide_index=True)
 # st_yled.table(df, background_color="#041d36", color="#d5d9dd",border_style="solid")
