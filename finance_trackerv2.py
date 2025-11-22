@@ -114,7 +114,8 @@ for tab in tab_list:
                 default_borrowers, 
                 selection_mode="multi",
                 key=bank,
-                default=default_borrowers
+                default=default_borrowers,
+                label_visibility="hidden"
                 )
             borrowers = filter_options
 
@@ -134,26 +135,42 @@ for tab in tab_list:
                         chart_type="area",
                         border=True,
                         )
-        translist_col,transmodifier_col = st.columns([0.6,0.4],vertical_alignment="top",border=True)
 
+        st.subheader("Transactions")
+        # Filters borrowers
+        bank_borrowers = [i.upper() for i in borrowers]
+        bank_df = bank_df[bank_df["BORROWER"].isin(bank_borrowers)]
+
+        # Sort transactions based on date
+        bank_df["DATE"] = pd.to_datetime(bank_df["DATE"])
+        bank_df = bank_df.sort_values("DATE", ascending=False)
+        bank_df["DATE"] = bank_df["DATE"].dt.strftime("%B %d, %Y")
+
+        # Reduces date redundancy
+        bank_df["DATE"] = bank_df["DATE"].mask(bank_df["DATE"].duplicated(), "")
+
+        st.dataframe(bank_df, width="stretch", hide_index=True)
+
+        index += 1
+        translist_col,col2,col3,transmodifier_col = st.columns([0.5,0.15,0.5,0.15],vertical_alignment="center",border=False)
         # Transaction List (Dataframe)
-        with translist_col:
-            st.subheader("Transactions")
-            # Filters borrowers
-            bank_borrowers = [i.upper() for i in borrowers]
-            bank_df = bank_df[bank_df["BORROWER"].isin(bank_borrowers)]
+        # with translist_col:
+        #     st.subheader("Transactions")
+        #     # Filters borrowers
+        #     bank_borrowers = [i.upper() for i in borrowers]
+        #     bank_df = bank_df[bank_df["BORROWER"].isin(bank_borrowers)]
 
-            # Sort transactions based on date
-            bank_df["DATE"] = pd.to_datetime(bank_df["DATE"])
-            bank_df = bank_df.sort_values("DATE", ascending=False)
-            bank_df["DATE"] = bank_df["DATE"].dt.strftime("%B %d, %Y")
+        #     # Sort transactions based on date
+        #     bank_df["DATE"] = pd.to_datetime(bank_df["DATE"])
+        #     bank_df = bank_df.sort_values("DATE", ascending=False)
+        #     bank_df["DATE"] = bank_df["DATE"].dt.strftime("%B %d, %Y")
 
-            # Reduces date redundancy
-            bank_df["DATE"] = bank_df["DATE"].mask(bank_df["DATE"].duplicated(), "")
+        #     # Reduces date redundancy
+        #     bank_df["DATE"] = bank_df["DATE"].mask(bank_df["DATE"].duplicated(), "")
 
-            st.dataframe(bank_df, width="stretch", hide_index=True)
+        #     st.dataframe(bank_df, width="stretch", hide_index=True)
 
-            index += 1
+        #     index += 1
 
         # Transaction Modifiers
         with transmodifier_col:
@@ -201,19 +218,25 @@ for tab in tab_list:
                 # Submit button Column
                 if button_col.button("Submit"):
                     with st.spinner("Submitting...", show_time=False):
-                    # Generates multiple entries based on installment terms
+                        # Generates multiple entries based on installment terms
                         if installment_check:
-                            installment_selection
+                            row_list = []
+                            monthly_term, x = installment_selection.split(" ")
+                            divided_amount = amount / float(monthly_term)
 
-                            new_row = {
-                                "DATE": date_of_transaction,
-                                "DESCRIPTION": description,
-                                "BANK": bank_selection.upper(),
-                                "BORROWER": transaction_borrower,
-                                "AMOUNT": amount,
-                                "INSTALLMENT": installment_selection,
-                                "REMARKS": remarks
-                            }
+                            for i in range(int(monthly_term)):
+                                suffix = f" ({i+1}/{monthly_term})"
+                                new_row = {
+                                    "DATE": date_of_transaction,
+                                    "DESCRIPTION": description + suffix,
+                                    "BANK": bank_selection.upper(),
+                                    "BORROWER": transaction_borrower,
+                                    "AMOUNT": int(divided_amount),
+                                    "INSTALLMENT": installment_selection,
+                                    "REMARKS": remarks
+                                }
+
+                                row_list.append(new_row)
                         else:
                             new_row = {
                                 "DATE": date_of_transaction,
@@ -226,10 +249,10 @@ for tab in tab_list:
                             }
                         # with st.spinner("Submitting...", show_time=False):
                         time.sleep(3)
-                    success = st.success('Transaction submitted!', icon="✅")
-                    new_row
+                    st.success('Transaction submitted!', icon="✅")
+                    row_list
                     time.sleep(1.5)
-                    st.rerun()
+                    # st.rerun()
                 
             if st.button("Add Transaction",key=bank+'add'):
                 add_transaction()
