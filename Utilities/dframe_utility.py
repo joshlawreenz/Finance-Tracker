@@ -1,16 +1,16 @@
 from datetime import datetime
 import calendar
+import pandas as pd
 
 now = datetime.now()
 
 #Get Borrowers list
 def get_borrowers_list(dataframe):
-
-    borrowers = []
+    borrowers = ['JOSH','ZARAH','MOM']
     
     for borrower in dataframe["BORROWER"]:
         try:
-            split_borrower = borrower.split(", ")
+            split_borrower = borrower.split(",")
             for i in split_borrower:
                 borrowers.append(i.strip())
         except:
@@ -30,8 +30,13 @@ def get_bank_list(dataframe):
 
     return bank_list
 
-def get_total_amount_spent(dataframe,borrowers,bank=None):
+def get_total_amount_spent(dataframe,borrowers,bank=None,start=None,end=None):
     total_amount = []
+    if start and end:
+        dataframe["DATE"] = pd.to_datetime(dataframe["DATE"])
+        dataframe = dataframe[(dataframe["DATE"] >= start) & (dataframe["DATE"] <= end)]
+        dataframe["DATE"] = dataframe["DATE"].dt.strftime("%B %d, %Y")
+
     for borrower in borrowers:
         borrower_df = dataframe[dataframe["BORROWER"]==borrower.upper()]
 
@@ -40,7 +45,10 @@ def get_total_amount_spent(dataframe,borrowers,bank=None):
 
         total = 0
         for amount in borrower_df["AMOUNT"]:
-            total += float(amount.replace(",",""))
+            try:
+                total += float(amount.replace(",",""))
+            except:
+                total += float(amount)
 
         borrower_json = {
             "Name": borrower.capitalize(),
@@ -50,13 +58,20 @@ def get_total_amount_spent(dataframe,borrowers,bank=None):
     total_amount = sorted(total_amount, key=lambda x: x['Total'], reverse=True)
     return total_amount
 
-def get_monthly_due(dataframe,bank):
+def get_monthly_due(dataframe,bank,start=None,end=None):
+    if start and end:
+        dataframe["DATE"] = pd.to_datetime(dataframe["DATE"])
+        dataframe = dataframe[(dataframe["DATE"] >= start) & (dataframe["DATE"] <= end)]
+        dataframe["DATE"] = dataframe["DATE"].dt.strftime("%B %d, %Y")
     if bank:
         dataframe = dataframe[dataframe["BANK"] == bank]
 
     total = 0
     for amount in dataframe["AMOUNT"]:
-        total += float(amount.replace(",",""))
+        try:
+            total += float(amount.replace(",",""))
+        except AttributeError:
+            total += float(amount)
 
     return total
 

@@ -9,11 +9,15 @@ WORKSHEET_NAME = "Prototype"   # The worksheet you want to fetch
 OUTPUT_FILE = "cleaned.csv"
 
 def load_sheet():
-    if os.path.exists("local_sheet_backup.csv"):
+    if os.path.exists("output.csv"):
+        df = pd.read_csv("output.csv")
+        return df 
+    
+    elif os.path.exists("local_sheet_backup.csv"):
         df = pd.read_csv("local_sheet_backup.csv",skiprows=12)
+        df["DATE"] = pd.to_datetime(df["DATE"])
+        df["DATE"] = df["DATE"].dt.strftime("%Y %m, %d")
         return df
-    else:
-        raise("No sheets found.")
     
 def get_googlesheet_df():
     scopes = [
